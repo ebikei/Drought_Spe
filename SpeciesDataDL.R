@@ -38,6 +38,39 @@ for (i in 1:length(test)){
 	rm(temp,temp2)
 }
 
+df$PolName=str_split_fixed(df$Parameter.Name, " PM2.5 LC", 2)[,1]
+df$PolName[df$PolName=='Sodium Ion Pm2.5 LC']='Sodium_Ion'
+df$PolName[df$PolName=='Black Carbon PM2.5 at 880 nm']='BlackCarbon'
+df$PolName[df$PolName=='Ammonium Ion']='Ammonium_Ion'
+df$PolName[df$PolName=='Potassium Ion']='Potassium_Ion'
+df$PolName[df$PolName=='Total Nitrate']='Total_Nitrate'
+df$PolName[df$PolName=='Non-volatile Nitrate']='Nonvolatile_Nitrate'
+df$PolName[df$PolName=='Total Carbon']='TotalCarbon'
+
+Monitor=mutate(df,FIPS=substr(FIPSPOC,1,9)) %>%
+	distinct(FIPS,Latitude,Longitude) %>%
+	arrange(FIPS)
+
 df2=mutate(df,FIPS=substr(FIPSPOC,1,9)) %>%
-	group_by(FIPSPOC_Parameter,Date.Local) %>%
-	summarize(Value=mean(Arithmetic.Mean))
+	group_by(FIPS,Date.Local,PolName) %>%
+	summarize(Value=mean(Arithmetic.Mean,na.rm=TRUE)) %>%
+	arrange(FIPS,Date.Local,PolName)
+
+df3=dcast(df2,FIPS+Date.Local~PolName,value.var='Value')
+
+load("C:\\Users\\kebisu\\Documents\\Research\\DroughtSpecies\\Data\\PM25_Data_20160826.RData") #PM25_AQS2
+PM25_AQS2=rename(PM25_AQS2,Date.Local=Date)
+
+df4=left_join(df3,PM25_AQS2,by=c('FIPS','Date.Local')) %>%
+	filter(!is.na(PM25_total))
+
+df5=filter(df4,!is.na(Sulfate),PM25_total>0) # I chose Sulfate since this is the 2nd majority component (Bell et al 2007 EHP)
+df5$sum=rowSums((df5[,3:69]),na.rm=TRUE)
+df5=mutate(df5,diff=PM25_total-sum,diff_percent=(PM25_total-sum)*100/PM25_total)
+df6=filter(df5,abs(diff_percent)<50,abs(diff)<30) %>%
+	arrange(FIPS,Date.Local)
+
+save(df6,file='C:\\Users\\kebisu\\Documents\\Research\\DroughtSpecies\\Data\\PM25SpeciesData.RData')
+
+
+rm(list=ls())
